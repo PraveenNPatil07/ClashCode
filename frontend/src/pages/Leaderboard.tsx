@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { fetchCollegeLeaderboard, fetchCurrentSeason, fetchStudentLeaderboard } from '../api/client';
+import { createWar, fetchCollegeLeaderboard, fetchCurrentSeason, fetchStudentLeaderboard } from '../api/client';
+import { readSession } from '../lib/session';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { CollegeCrest, getCollegeBrand, getCollegeSurfaceStyle } from '../components/CollegeBrand';
 import type { CollegeLeaderboardEntry, CurrentSeasonResponse, StudentLeaderboardEntry } from '../types/api';
@@ -51,6 +52,20 @@ export function LeaderboardPage() {
   const [season, setSeason] = useState<CurrentSeasonResponse['season'] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [session] = useState(() => readSession());
+  const [declaring, setDeclaring] = useState<string | null>(null);
+
+  async function handleDeclareWar(targetCollegeId: string) {
+    if (!session) return;
+    try {
+      setDeclaring(targetCollegeId);
+      const res = await createWar({ collegeAId: session.user.college_id, collegeBId: targetCollegeId });
+      window.location.href = `/war/${res.war.id}`;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to declare war.');
+      setDeclaring(null);
+    }
+  }
 
   useEffect(() => {
     void (async () => {
@@ -117,9 +132,9 @@ export function LeaderboardPage() {
             const brand = getCollegeBrand(entry.name);
             const isTop = entry.rank <= 3;
             return (
-              <div key={entry.id} className={'grid grid-cols-[72px_1fr_160px_110px_110px] gap-4 border-b px-6 py-4 text-sm text-slate-300 last:border-b-0 transition-colors hover:bg-white/[0.02] animate-float-up' + (isTop ? ' rank-row-' + entry.rank : '')} style={{ borderColor: 'var(--color-border)', animationDelay: idx * 40 + 'ms', ...(isTop ? getCollegeSurfaceStyle(entry.name) : {}) }}>
-                <div className="flex items-center"><RankMedal rank={entry.rank} /></div>
-                <div className="flex items-center gap-4 min-w-0">
+              <div key={entry.id} className={'relative group grid grid-cols-[72px_1fr_160px_110px_110px] gap-4 border-b px-6 py-4 text-sm text-slate-300 last:border-b-0 transition-colors hover:bg-white/[0.02] animate-float-up' + (isTop ? ' rank-row-' + entry.rank : '')} style={{ borderColor: 'var(--color-border)', animationDelay: idx * 40 + 'ms', ...(isTop ? getCollegeSurfaceStyle(entry.name) : {}) }}>
+                <div className="flex items-center group-hover:opacity-10 transition-opacity"><RankMedal rank={entry.rank} /></div>
+                <div className="flex items-center gap-4 min-w-0 group-hover:opacity-10 transition-opacity">
                   <CollegeCrest collegeName={entry.name} size={isTop ? 52 : 44} />
                   <div className="min-w-0">
                     <p className={'font-bold text-white truncate ' + (isTop ? 'text-base' : 'text-sm')}>{entry.name}</p>
@@ -127,9 +142,17 @@ export function LeaderboardPage() {
                     <PointsBar value={entry.total_points} max={maxPtsC} delay={idx * 50 + 300} />
                   </div>
                 </div>
-                <div className="flex items-center"><AnimatedNumber value={entry.total_points} className={'font-bold ' + (isTop ? 'text-base text-white' : '')} formatter={v => v.toLocaleString()} /></div>
-                <div className="flex items-center"><AnimatedNumber value={entry.wars_won} className="font-semibold" /></div>
-                <div className="flex items-center"><AnimatedNumber value={entry.battles_won} className="font-semibold" /></div>
+                <div className="flex items-center group-hover:opacity-10 transition-opacity"><AnimatedNumber value={entry.total_points} className={'font-bold ' + (isTop ? 'text-base text-white' : '')} formatter={v => v.toLocaleString()} /></div>
+                <div className="flex items-center group-hover:opacity-10 transition-opacity"><AnimatedNumber value={entry.wars_won} className="font-semibold" /></div>
+                <div className="flex items-center group-hover:opacity-10 transition-opacity"><AnimatedNumber value={entry.battles_won} className="font-semibold" /></div>
+
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {session && session.user.college_id !== entry.id && (
+                    <button onClick={() => handleDeclareWar(entry.id)} disabled={declaring === entry.id} className="rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 px-6 py-2 text-sm font-bold hover:bg-rose-500/30 hover:scale-105 transition-all shadow-[0_0_20px_rgba(244,63,94,0.2)]">
+                      {declaring === entry.id ? 'Starting...' : 'Declare War ⚔️'}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
