@@ -20,6 +20,7 @@ Instead of students grinding algorithms in isolation, ClashCode transforms codin
 - [Core Features & Guarantees](#core-features--guarantees)
 - [Endpoints](#endpoints)
 - [Technology Stack](#technology-stack)
+- [How We Used Codex & GPT-5.6](#how-we-used-codex--gpt-56)
 - [Local Development](#local-development)
 - [Production Deployment](#production-deployment-render--supabase)
 - [Known Limitations](#known-limitations-hackathon-scope)
@@ -103,6 +104,21 @@ sequenceDiagram
 - **AI Engine**: OpenAI API (for problem generation & debriefs)
 - **Testing**: Playwright (E2E) + Vitest (Unit)
 - **Package Manager**: npm workspaces (Monorepo setup)
+
+---
+
+## 🧠 How We Used Codex & GPT-5.6
+
+**Where Codex Accelerated Our Workflow:**
+Codex acted as a highly capable pair-programmer throughout the entire development lifecycle, drastically accelerating our velocity. Key areas where Codex was instrumental included:
+1. **Real-Time Infrastructure:** Codex architected the complex `Socket.io` event synchronization, handling matchmaking, presence tracking, and real-time battle state across clients seamlessly.
+2. **Full-Stack Scaffolding & Refactoring:** Codex rapidly scaffolded the Node.js/Express backend and Vite frontend. When we ran into complex TypeScript generic constraints and type-mismatches between our shared data models, Codex instantly identified and resolved them across the monorepo.
+3. **Last-Minute Feature Shipping:** Right before submission, we realized the core "College War" declaration UI was missing. Codex immediately mapped out the missing UI components, added the "Declare War" functionality to our Leaderboard, and perfectly hooked it into the existing backend routes without breaking the build. 
+
+**How GPT-5.6 Powers the Core Experience:**
+GPT-5.6 is the beating heart of ClashCode's infinite replayability. We heavily integrated GPT-5.6 to solve two major problems in competitive programming:
+1. **Zero-Cheating Problem Generation:** Instead of pulling from a static database of known problems, our backend queries GPT-5.6 to synthesize completely novel algorithmic challenges on the fly. It strictly outputs structured JSON containing the problem description, constraints, and perfectly deterministic edge-case test inputs/outputs for our sandbox judge to evaluate.
+2. **Personalized Mentorship (Debriefs):** After a battle, we feed the user's submitted code directly into GPT-5.6. It acts as a senior engineer, analyzing their specific implementation and providing a detailed breakdown of their Big O time/space complexity, alongside actionable refactoring advice.
 
 ---
 
