@@ -1,4 +1,4 @@
-import type { JudgeExecutionResult, Problem, ProblemTestCase, Submission, SubmissionTestResult, SubmissionVerdict, SupportedLanguage } from '@clashcode/shared';
+import type { JudgeExecutionResult, ProblemTestCase, Submission, SubmissionTestResult, SubmissionVerdict, SupportedLanguage } from '@clashcode/shared';
 
 import {
   completeBattleIfUnclaimed,
@@ -77,39 +77,6 @@ function buildIncorrectFeedback(testCase: ProblemTestCase, result: JudgeExecutio
   return `Wrong answer on test ${JSON.stringify(testCase.input)}. Expected ${expected}, got ${actual}.`;
 }
 
-function assertPlayerPointsAwarded(beforeBattle: Problem, _unused = 0) {
-  void beforeBattle;
-  void _unused;
-}
-
-function validateBattlePointUpdates(beforeBattle: Awaited<ReturnType<typeof fetchBattleDetail>>, afterBattle: Awaited<ReturnType<typeof fetchBattleDetail>>, winnerUserId: string) {
-  if (!beforeBattle || !afterBattle || !beforeBattle.player_b || !afterBattle.player_b || afterBattle.is_ai_sparring) {
-    return;
-  }
-
-  const beforeParticipants = new Map([
-    [beforeBattle.player_a.id, beforeBattle.player_a.points],
-    [beforeBattle.player_b.id, beforeBattle.player_b.points]
-  ]);
-  const afterParticipants = new Map([
-    [afterBattle.player_a.id, afterBattle.player_a.points],
-    [afterBattle.player_b.id, afterBattle.player_b.points]
-  ]);
-
-  const loserUserId = beforeBattle.player_a.id === winnerUserId ? beforeBattle.player_b.id : beforeBattle.player_a.id;
-  const winnerBefore = beforeParticipants.get(winnerUserId);
-  const winnerAfter = afterParticipants.get(winnerUserId);
-  const loserBefore = beforeParticipants.get(loserUserId);
-  const loserAfter = afterParticipants.get(loserUserId);
-
-  if (winnerBefore === undefined || winnerAfter === undefined || loserBefore === undefined || loserAfter === undefined) {
-    throw new Error('Unable to verify battle point updates because participant snapshots were incomplete.');
-  }
-
-  if (winnerAfter !== winnerBefore + 10 || loserAfter !== loserBefore + 2) {
-    throw new Error(`Battle point update mismatch. Winner expected ${winnerBefore + 10}, received ${winnerAfter}. Loser expected ${loserBefore + 2}, received ${loserAfter}.`);
-  }
-}
 
 export async function judgeAgainstProblem(code: string, language: SupportedLanguage, testCases: ProblemTestCase[]) {
   const testResults: SubmissionTestResult[] = [];

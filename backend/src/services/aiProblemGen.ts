@@ -47,11 +47,11 @@ function validateGeneratedProblem(problem: unknown, expectedDifficulty: ProblemD
 
   for (const testCase of candidate.test_cases) {
     if (!testCase || typeof testCase !== 'object' || Array.isArray(testCase)) {
-      throw new Error('A generated test case was malformed.');
+      throw new Error('A generated test case was malformed (must be an object with input and expected_output).');
     }
 
-    if (!testCase.input || typeof testCase.input !== 'object' || Array.isArray(testCase.input)) {
-      throw new Error('A generated test case input must be an object.');
+    if (testCase.input === undefined || testCase.input === null) {
+      throw new Error('A generated test case input must not be null or undefined.');
     }
 
     if (!Object.prototype.hasOwnProperty.call(testCase, 'expected_output')) {

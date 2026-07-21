@@ -8,17 +8,16 @@ import { CustomCursor } from './components/CustomCursor';
 export default function App() {
   const path = window.location.pathname;
 
-  // Per-page document titles (Bug 15 fix)
   if (path.startsWith('/battle/')) {
-    document.title = 'Battle Arena — ClashCode';
+    document.title = 'Battle Arena - ClashCode';
   } else if (path.startsWith('/leaderboard')) {
-    document.title = 'Leaderboard — ClashCode';
+    document.title = 'Leaderboard - ClashCode';
   } else if (path.startsWith('/war/')) {
-    document.title = 'War Room — ClashCode';
+    document.title = 'War Room - ClashCode';
   } else if (path === '/') {
-    document.title = 'ClashCode — Code. Clash. Conquer.';
+    document.title = 'ClashCode - Code. Clash. Conquer.';
   } else {
-    document.title = '404 — ClashCode';
+    document.title = '404 - ClashCode';
   }
 
   return (

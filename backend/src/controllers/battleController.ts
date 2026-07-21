@@ -13,7 +13,7 @@ import {
 import { ensureAiBotUser, fetchOpponentPool, fetchPlayableProblems, findUserById } from '../models/userModel.js';
 import { processBattleSubmission } from '../services/battleSubmissionService.js';
 import { clearBotTimer, scheduleAiSparringTurn } from '../services/aiSparring.js';
-import { battleRoom, getSocketServer, warRoom } from '../services/socket.js';
+import { battleRoom, getSocketServer, warRoom, isUserOnline } from '../services/socket.js';
 
 const BATTLE_DURATION_MS = 15 * 60 * 1000;
 const SPARRING_ELIGIBILITY_MS = 20 * 1000;
@@ -80,9 +80,10 @@ export async function createBattle(request: Request, response: Response): Promis
 
 export async function quickStartBattle(request: Request, response: Response): Promise<void> {
   try {
-    const { userId, opponentId } = request.body as {
+    const { userId, opponentId, playWithAi } = request.body as {
       userId?: string;
       opponentId?: string;
+      playWithAi?: boolean;
     };
 
     if (!userId) {
@@ -96,16 +97,45 @@ export async function quickStartBattle(request: Request, response: Response): Pr
       return;
     }
 
+    if (playWithAi) {
+      const [problems, botUser] = await Promise.all([
+        fetchPlayableProblems(),
+        ensureAiBotUser()
+      ]);
+      
+      if (problems.length === 0) {
+        response.status(409).json({ message: 'No playable problems are available yet.' });
+        return;
+      }
+      
+      const problem = problems[Math.floor(Math.random() * problems.length)];
+      const battle = await createBattleRecord(player.id, null, problem.id);
+      await attachAiOpponent(battle.id, botUser.id);
+      await startBattleIfWaiting(battle.id);
+      const detail = await fetchBattleDetail(battle.id);
+      
+      scheduleAiSparringTurn({
+        battleId: battle.id,
+        botUserId: botUser.id,
+        problem: detail!.problem
+      });
+      
+      response.status(201).json({ battle: detail });
+      return;
+    }
+
     const [opponents, problems] = await Promise.all([
       fetchOpponentPool(userId, opponentId ?? null),
       fetchPlayableProblems()
     ]);
 
-    const filteredOpponents = opponents.filter((entry) => entry.id !== userId && entry.college_id !== player.college_id);
-    const opponentPool = filteredOpponents.length > 0 ? filteredOpponents : opponents.filter((entry) => entry.id !== userId);
+    const onlineOpponents = opponentId ? opponents : opponents.filter(entry => isUserOnline(entry.id));
+
+    const filteredOpponents = onlineOpponents.filter((entry) => entry.id !== userId && entry.college_id !== player.college_id);
+    const opponentPool = filteredOpponents.length > 0 ? filteredOpponents : onlineOpponents.filter((entry) => entry.id !== userId);
 
     if (opponentPool.length === 0) {
-      response.status(409).json({ message: 'No opponents are available yet.' });
+      response.status(409).json({ message: 'No online opponents are available right now.' });
       return;
     }
 
@@ -117,14 +147,7 @@ export async function quickStartBattle(request: Request, response: Response): Pr
     const opponent = opponentPool[Math.floor(Math.random() * opponentPool.length)];
     const problem = problems[Math.floor(Math.random() * problems.length)];
     const battle = await createBattleRecord(player.id, opponent.id, problem.id);
-    await startBattleIfWaiting(battle.id);
     const detail = await fetchBattleDetail(battle.id);
-
-    getSocketServer().to(battleRoom(battle.id)).emit('battle:started', {
-      battleId: battle.id,
-      startedAt: detail?.started_at ?? null,
-      durationMs: BATTLE_DURATION_MS
-    });
 
     response.status(201).json({ battle: detail });
   } catch (error) {
@@ -426,5 +449,25 @@ export async function getBattle(request: Request, response: Response): Promise<v
     response.status(500).json({
       message: error instanceof Error ? error.message : 'Unexpected error while fetching battle.'
     });
+  }
+}
+
+import { generateBattleDebrief } from '../services/aiDebriefService.js';
+
+export async function getBattleDebrief(request: Request, response: Response): Promise<void> {
+  try {
+    const battleId = request.params.id;
+    const { userId } = request.query;
+
+    if (typeof battleId !== 'string' || typeof userId !== 'string') {
+      response.status(400).json({ message: 'battleId parameter and userId query are required.' });
+      return;
+    }
+
+    const debriefMarkdown = await generateBattleDebrief(battleId, userId as string);
+    response.json({ debrief: debriefMarkdown });
+  } catch (error) {
+    console.error('Debrief error:', error);
+    response.status(500).json({ message: error instanceof Error ? error.message : 'Failed to generate debrief.' });
   }
 }

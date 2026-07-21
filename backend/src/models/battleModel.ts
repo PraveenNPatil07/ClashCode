@@ -263,3 +263,5 @@ export async function markBattleDrawIfExpired(battleId: string) {
     ended_at: null
   }) as DrawRpcResponse;
 }
+
+

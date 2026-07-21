@@ -27,48 +27,42 @@ export type AiUsage = {
   total_tokens: number;
 };
 
+import OpenAI from 'openai';
+
 export async function createChatCompletion(messages: ChatMessage[], options?: { maxTokens?: number; responseFormat?: Record<string, unknown> }) {
   if (!env.GROQ_API_KEY) {
     throw new Error('Missing GROQ_API_KEY. Add it to backend/.env to enable AI review and sparring.');
   }
 
-  const body: Record<string, unknown> = {
+  const openai = new OpenAI({
+    apiKey: env.GROQ_API_KEY,
+    baseURL: env.GROQ_BASE_URL
+  });
+
+  const body: any = {
     model: env.GROQ_MODEL,
     messages,
-    max_completion_tokens: options?.maxTokens ?? 1200
+    max_tokens: options?.maxTokens ?? 1200
   };
 
   if (options?.responseFormat) {
     body.response_format = options.responseFormat;
   }
 
-  const response = await fetch(`${env.GROQ_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`
-    },
-    body: JSON.stringify(body)
-  });
+  const response = await openai.chat.completions.create(body);
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Groq request failed (${response.status}): ${message}`);
-  }
-
-  const payload = (await response.json()) as ChatCompletionResponse;
-  const choice = payload.choices?.[0]?.message;
+  const choice = response.choices?.[0]?.message;
   if (!choice?.content) {
-    const refusal = choice?.refusal ?? 'No content returned from Groq.';
+    const refusal = (choice as any)?.refusal ?? 'No content returned from OpenAI.';
     throw new Error(refusal);
   }
 
   return {
     text: choice.content,
     usage: {
-      prompt_tokens: payload.usage?.prompt_tokens ?? 0,
-      completion_tokens: payload.usage?.completion_tokens ?? 0,
-      total_tokens: payload.usage?.total_tokens ?? 0
+      prompt_tokens: response.usage?.prompt_tokens ?? 0,
+      completion_tokens: response.usage?.completion_tokens ?? 0,
+      total_tokens: response.usage?.total_tokens ?? 0
     } satisfies AiUsage
   };
 }

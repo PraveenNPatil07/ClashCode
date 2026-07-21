@@ -1,0 +1,44 @@
+{
+  "groundrulesVersion": "1.9.0",
+  "adopted": true,
+  "adoptedAt": "2026-07-20",
+  "bootstrappedWithVersion": null,
+  "migrations": [],
+  "answers": {
+    "projectName": "ClashCode"
+  },
+  "intent": {
+    "source": "README.md"
+  },
+  "appliedPractices": [],
+  "loop": {
+    "scaffolded": false,
+    "at": null
+  },
+  "policies": {
+    "noAiAttribution": false
+  },
+  "generatedFiles": [
+    "CLAUDE.md",
+    "docs/VISION.md",
+    "docs/decisions/README.md",
+    "docs/decisions/0000-template.md",
+    "docs/LEARNINGS.md",
+    "intake/README.md",
+    "docs/media/README.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DATA_MODEL.md",
+    "docs/SECURITY.md",
+    "docs/DESIGN_SYSTEM.md"
+  ],
+  "adoptedFiles": {
+    "README.md": "README",
+    "TESTING.md": "TESTING",
+    "CONTRIBUTING.md": "CONTRIBUTING",
+    "CODE_OF_CONDUCT.md": "CODE_OF_CONDUCT",
+    "LICENSE": "LICENSE"
+  },
+  "adoptionMode": "map",
+  "migratedFiles": {},
+  "skippedFiles": {}
+}

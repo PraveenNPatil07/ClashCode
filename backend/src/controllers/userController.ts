@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { fetchCollegeById, fetchLeaderboard, fetchProblemsByIds, fetchSuggestedOpponents, fetchUserBattles, fetchUsersByIds, findUserById } from '../models/userModel.js';
+import { isUserOnline } from '../services/socket.js';
 
 export async function getDashboard(request: Request, response: Response): Promise<void> {
   try {
@@ -11,12 +12,14 @@ export async function getDashboard(request: Request, response: Response): Promis
       return;
     }
 
-    const [college, leaderboard, suggestedOpponents, battles] = await Promise.all([
+    let [college, leaderboard, suggestedOpponents, battles] = await Promise.all([
       fetchCollegeById(user.college_id),
       fetchLeaderboard(4),
-      fetchSuggestedOpponents(user.id, user.college_id, 6),
+      fetchSuggestedOpponents(user.id, user.college_id, 50),
       fetchUserBattles(user.id, 8)
     ]);
+
+    suggestedOpponents = suggestedOpponents.filter(opp => isUserOnline(opp.id)).slice(0, 6);
 
     const otherUserIds = battles.flatMap((battle) => [battle.player_a_id, battle.player_b_id]).filter((id) => Boolean(id) && id !== user.id) as string[];
     const problemIds = battles.map((battle) => battle.problem_id);

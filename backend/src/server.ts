@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 
 import { createApp } from './app.js';
 import { env } from './db/env.js';
-import { battleRoom, setSocketServer, warRoom } from './services/socket.js';
+import { battleRoom, markUserOnline, setSocketServer, sweepStalePresence, warRoom } from './services/socket.js';
 
 const app    = createApp();
 const server = http.createServer(app);
@@ -57,6 +57,7 @@ setInterval(() => {
       presenceMap.delete(key); // full GC after 3× threshold
     }
   }
+  sweepStalePresence();
 }, 10_000);
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,10 @@ io.on('connection', (socket) => {
   socket.emit('socket:ready', {
     message:     'ClashCode socket connection established.',
     connectedAt: new Date().toISOString()
+  });
+
+  socket.on('global:heartbeat', ({ userId }: { userId: string }) => {
+    if (userId) markUserOnline(userId);
   });
 
   // ── Battle room ──────────────────────────────────────────────────────────

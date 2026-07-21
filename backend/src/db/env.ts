@@ -34,5 +34,5 @@ export const env: ServerEnv = {
   RUSTBOX_BASE_URL: process.env.RUSTBOX_BASE_URL ?? 'https://api.rustbox.sh/api',
   GROQ_API_KEY: process.env.GROQ_API_KEY ?? null,
   GROQ_BASE_URL: process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1',
-  GROQ_MODEL: process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b'
+  GROQ_MODEL: process.env.GROQ_MODEL ?? 'llama-3.1-70b-versatile'
 };

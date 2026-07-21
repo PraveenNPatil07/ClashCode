@@ -167,6 +167,7 @@ function Dashboard({
   session, dashboard, busyAction,
   onQuickBattle, onChallenge, onLogout, onGenerate,
   generatorForm, setGeneratorForm, generatorSummary,
+  pendingBattle, onConfirmPracticeBattle, onDismissPracticeBattle,
 }: {
   session: Session;
   dashboard: DashboardResponse;
@@ -178,6 +179,9 @@ function Dashboard({
   generatorForm: { difficulty: ProblemDifficulty; category: string };
   setGeneratorForm: React.Dispatch<React.SetStateAction<{ difficulty: ProblemDifficulty; category: string }>>;
   generatorSummary: { title: string; difficulty: ProblemDifficulty; category: string } | null;
+  pendingBattle: { battleId: string; problemTitle: string } | null;
+  onConfirmPracticeBattle: () => void;
+  onDismissPracticeBattle: () => void;
 }) {
   const user = dashboard.user;
   const activeBattle = dashboard.activeBattles[0] ?? null;
@@ -222,6 +226,36 @@ function Dashboard({
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8 space-y-8">
+
+        {pendingBattle && (
+          <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-6 flex flex-col sm:flex-row items-center gap-4 justify-between animate-slide-up shadow-[0_0_20px_rgba(99,102,241,0.1)]">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-1">🤖 AI Practice Ready</p>
+              <h3 className="text-xl font-black text-white">{pendingBattle.problemTitle}</h3>
+              <p className="text-sm text-indigo-200/70 mt-1">
+                {pendingBattle.battleId === 'AI_PROMPT' 
+                  ? 'Would you like to instantly spawn an AI opponent to practice against?' 
+                  : 'Your custom problem has been generated. Ready to start coding?'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={onDismissPracticeBattle}
+                className="flex-1 sm:flex-none btn-ghost px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onConfirmPracticeBattle}
+                className="flex-1 sm:flex-none btn-primary px-6 py-2 shadow-lg shadow-indigo-500/20 text-sm flex items-center justify-center gap-2"
+              >
+                Let's go <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Stats strip ── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 stagger">
@@ -681,6 +715,7 @@ export function HomePage() {
   const [loginEmail,  setLoginEmail]  = useState('');
   const [generatorForm, setGeneratorForm] = useState<{ difficulty: ProblemDifficulty; category: string }>({ difficulty: 'easy', category: 'arrays' });
   const [generatorSummary, setGeneratorSummary] = useState<{ title: string; difficulty: ProblemDifficulty; category: string } | null>(null);
+  const [pendingBattle, setPendingBattle] = useState<{ battleId: string; problemTitle: string } | null>(null);
 
   useEffect(() => {
     const socket = io(SOCKET_URL, { transports: ['websocket'] });
@@ -723,8 +758,8 @@ export function HomePage() {
 
   async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // Bug 6 fix: guard against empty collegeId (colleges still loading)
     if (!signupForm.collegeId) {
+      setError('Colleges are still loading — please wait a moment and try again.');
       return;
     }
     try {
@@ -749,14 +784,19 @@ export function HomePage() {
     } finally { setBusyAction(null); }
   }
 
-  async function handleQuickBattle() {
+  async function handleQuickBattle(playWithAi = false) {
     if (!session) return;
     try {
       setBusyAction('quickbattle');
-      const res = await createQuickBattle({ userId: session.user.id });
+      const res = await createQuickBattle({ userId: session.user.id, playWithAi });
       window.location.href = `/battle/${res.battle.id}`;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Quick battle failed.');
+      const msg = err instanceof Error ? err.message : 'Quick battle failed.';
+      if (msg.includes('No online opponents')) {
+        setPendingBattle({ battleId: 'AI_PROMPT', problemTitle: 'No players online. Fight AI instead?' });
+      } else {
+        setError(msg);
+      }
       setBusyAction(null);
     }
   }
@@ -781,11 +821,23 @@ export function HomePage() {
       const saved = await saveGeneratedProblem(generated);
       setGeneratorSummary({ title: saved.problem.title, difficulty: saved.problem.difficulty, category: saved.problem.category });
       const res = await createBattle({ playerAId: session.user.id, problemId: saved.problem.id });
-      window.location.href = `/battle/${res.battle.id}`;
+      // Show preview — let user confirm before entering the battle
+      setPendingBattle({ battleId: res.battle.id, problemTitle: saved.problem.title });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generate failed.');
     } finally { setBusyAction(null); }
   }
+
+  function handleConfirmPracticeBattle() {
+    if (pendingBattle?.battleId === 'AI_PROMPT') {
+      void handleQuickBattle(true);
+      setPendingBattle(null);
+      return;
+    }
+    if (pendingBattle) window.location.href = `/battle/${pendingBattle.battleId}`;
+  }
+
+  function handleDismissPracticeBattle() { setPendingBattle(null); }
 
   function handleLogout() { clearSession(); setSession(null); setDashboard(null); }
 
@@ -799,6 +851,9 @@ export function HomePage() {
         onGenerate={() => void handleGenerate()}
         generatorForm={generatorForm} setGeneratorForm={setGeneratorForm}
         generatorSummary={generatorSummary}
+        pendingBattle={pendingBattle}
+        onConfirmPracticeBattle={handleConfirmPracticeBattle}
+        onDismissPracticeBattle={handleDismissPracticeBattle}
       />
     );
   }

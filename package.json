@@ -13,9 +13,20 @@
     "dev:backend": "npm run dev --workspace backend",
     "build": "npm run build --workspaces",
     "seed": "npm run seed --workspace backend",
-    "typecheck": "npm run typecheck --workspaces"
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run --coverage",
+    "test:unit:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "devDependencies": {
-    "supabase": "^2.109.1"
+    "@playwright/test": "^1.61.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "jsdom": "^29.1.1",
+    "supabase": "^2.109.1",
+    "vitest": "^4.1.10"
   }
 }

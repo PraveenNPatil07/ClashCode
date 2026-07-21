@@ -103,6 +103,7 @@ export interface LoginPayload {
 export interface QuickStartBattlePayload {
   userId: string;
   opponentId?: string;
+  playWithAi?: boolean;
 }
 
 export interface QuickStartBattleResponse {

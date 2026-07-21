@@ -7,7 +7,8 @@ import type {
   Submission, SubmissionTestResult, SupportedLanguage, User
 } from '@clashcode/shared';
 
-import { fetchBattle, runBattle, startAiSparring, submitBattle } from '../api/client';
+import { fetchBattle, fetchBattleDebrief, runBattle, startAiSparring, startBattle, submitBattle } from '../api/client';
+import { AiDebriefModal } from '../components/AiDebriefModal';
 import { tierColor, tierLabel } from '../lib/tier';
 import { ToastContainer, useToast } from '../components/Toast';
 
@@ -166,7 +167,7 @@ function PlayerCard({
       )}
 
       <div className={isYou ? 'text-left' : 'text-right'}>
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 ${isYou ? '' : 'justify-end'}`}>
           {!isYou && <PresenceDot status={presence} />}
           <span className="font-bold text-white text-sm leading-tight">{name}</span>
           {isYou && <PresenceDot status={presence} />}
@@ -404,6 +405,11 @@ export function BattlePage() {
   const [presence,     setPresence]     = useState<Record<string, Presence>>({});
   const [activity,     setActivity]     = useState<ActivityEntry[]>([]);
 
+  // AI Debrief state
+  const [showDebriefModal, setShowDebriefModal] = useState(false);
+  const [debriefData,      setDebriefData]      = useState<string | null>(null);
+  const [debriefLoading,   setDebriefLoading]   = useState(false);
+
   const socketRef     = useRef<Socket | null>(null);
   const isAiSparRef   = useRef(false);
   const currentUserId = session?.user.id ?? '';
@@ -444,9 +450,30 @@ export function BattlePage() {
   const addActivity = useCallback((entry: ActivityEntry) => {
     setActivity(prev => [entry, ...prev].slice(0, 30)); // keep last 30
   }, []);
+  // Stable ref so socket useEffect never has addActivity as a re-connect trigger
+  const addActivityRef = useRef(addActivity);
+  useEffect(() => { addActivityRef.current = addActivity; }, [addActivity]);
 
-  // ── Language template reset ────────────────────────────────────────────────
-  useEffect(() => { setCode(TEMPLATES[language]); }, [language]);
+  // ── Language template reset (with confirmation guard) ─────────────────────
+  const prevLanguageRef = useRef<SupportedLanguage>(language);
+  useEffect(() => {
+    const prev = prevLanguageRef.current;
+    prevLanguageRef.current = language;
+    if (language === prev) return; // no change
+    const isModified = code.trim() !== TEMPLATES[prev].trim();
+    if (isModified) {
+      const confirmed = window.confirm(
+        `⚠ Switching to ${language.toUpperCase()} will replace your current code with a blank template.\n\nAre you sure? Your ${prev} code will be lost.`
+      );
+      if (!confirmed) {
+        // Revert the language selector back — but we need to avoid re-triggering
+        prevLanguageRef.current = prev;
+        setLanguage(prev);
+        return;
+      }
+    }
+    setCode(TEMPLATES[language]);
+  }, [language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load battle ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -501,7 +528,7 @@ export function BattlePage() {
         ? `⚔️ Sparring vs AI started! Bot thinking ~${Math.round((ev.botDelayMs ?? 0) / 1000)}s`
         : '⚔️ Battle started! Clock is live.';
       toast.info(msg);
-      addActivity(mkActivity('🚀', msg, 'info'));
+      addActivityRef.current(mkActivity('🚀', msg, 'info'));
       void refresh();
     });
 
@@ -510,15 +537,22 @@ export function BattlePage() {
         const who = isAiSparRef.current ? 'AI' : 'Opponent';
         const msg = `${who} submitted code — judging…`;
         toast.info(msg);
-        addActivity(mkActivity('⚡', msg, 'warning'));
+        addActivityRef.current(mkActivity('⚡', msg, 'warning'));
       }
     });
 
     socket.on('battle:submission_result', () => { void refresh(); });
 
-    socket.on('battle:completed', () => {
-      toast.info('🏁 Battle complete!');
-      addActivity(mkActivity('🏁', 'Battle has ended.', 'info'));
+    socket.on('battle:completed', (ev: { result?: string; winnerId?: string | null }) => {
+      const isWinner = ev.winnerId === currentUserId;
+      const isDraw   = ev.result === 'draw' || ev.winnerId === null;
+      const msg = isDraw  ? '🤝 Draw — neither solved it in time.'
+                : isWinner ? '🏆 VICTORY — You crushed it!'
+                           : '💀 Defeat — they got there first. Rematch?';
+      if (isDraw)   toast.info(msg);
+      else if (isWinner) toast.success(msg);
+      else               toast.error(msg);
+      addActivityRef.current(mkActivity(isDraw ? '🤝' : isWinner ? '🏆' : '💀', msg, isDraw ? 'warning' : isWinner ? 'success' : 'danger'));
       void refresh();
     });
 
@@ -528,10 +562,12 @@ export function BattlePage() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [battleId, currentUserId, addActivity]); // is_ai_sparring removed — use ref
+  }, [battleId, currentUserId]); // addActivity excluded — stable via addActivityRef
 
   // ── Timer ──────────────────────────────────────────────────────────────────
+  const timeUpFiredRef = useRef(false);
   useEffect(() => {
+    timeUpFiredRef.current = false; // reset on each battle/status change
     if (!battle?.started_at || battle.status !== 'active') {
       setTimeRemaining(durationMs);
       return;
@@ -540,7 +576,10 @@ export function BattlePage() {
       const elapsed = Date.now() - new Date(battle.started_at as string).getTime();
       const remaining = Math.max(0, durationMs - elapsed);
       setTimeRemaining(remaining);
-      if (remaining === 0) addActivity(mkActivity('⏰', 'Time is up!', 'danger'));
+      if (remaining === 0 && !timeUpFiredRef.current) {
+        timeUpFiredRef.current = true;
+        addActivity(mkActivity('⏰', 'Time is up!', 'danger'));
+      }
     };
     tick();
     const id = window.setInterval(tick, 1000);
@@ -594,6 +633,16 @@ export function BattlePage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
+  async function handleStartBattle() {
+    if (!battleId) return;
+    try {
+      await startBattle(battleId);
+      toast.success('Battle started!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start battle');
+    }
+  }
+
   async function handleRun() {
     if (!battle?.problem.test_cases?.length) { toast.warning('No test cases to run against.'); return; }
     if (!currentUserId) { toast.error('Sign in first.'); return; }
@@ -609,11 +658,12 @@ export function BattlePage() {
       const trs: SubmissionTestResult[] = Array.isArray(res.testResults) ? res.testResults : [];
       setRunResults(samples.map((tc, i) => ({ tc, tr: trs[i] })));
       const passed = trs.filter(t => t.passed).length;
+      const sampleNote = '(sample tests only — submit to run all hidden cases)';
       if (passed === samples.length) {
-        toast.success(`✅ All ${passed} sample(s) passed!`);
-        addActivity(mkActivity('✅', `All ${passed} samples passed`, 'success'));
+        toast.success(`✅ ${passed}/${samples.length} samples passed ${sampleNote}`);
+        addActivity(mkActivity('✅', `${passed}/${samples.length} samples passed`, 'success'));
       } else {
-        toast.warning(`⚠ ${passed}/${samples.length} samples passed`);
+        toast.warning(`⚠ ${passed}/${samples.length} samples passed ${sampleNote}`);
         addActivity(mkActivity('⚠', `${passed}/${samples.length} samples passed`, 'warning'));
       }
     } catch (err) {
@@ -664,13 +714,28 @@ export function BattlePage() {
       toast.info(`🤖 Sparring vs AI! Bot thinking ~${Math.round(res.botDelayMs / 1000)}s`);
       addActivity(mkActivity('🤖', 'AI sparring mode activated', 'info'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start AI sparring.');
+      toast.error(err instanceof Error ? err.message : 'Sparring start failed');
+    } finally { setRunning(false); }
+  }
+
+  async function handleDebrief() {
+    if (!battleId || !currentUserId) return;
+    setShowDebriefModal(true);
+    if (debriefData) return; // already loaded
+
+    try {
+      setDebriefLoading(true);
+      const res = await fetchBattleDebrief(battleId, currentUserId);
+      setDebriefData(res.debrief);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch debrief.');
+      setShowDebriefModal(false);
     } finally {
-      setSparPending(false);
+      setDebriefLoading(false);
     }
   }
 
-  // ── Outcome ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   const won  = battle?.status === 'completed' && battle.winner_id === currentUserId;
   const lost = battle?.status === 'completed' && battle.winner_id !== null && battle.winner_id !== currentUserId;
   const draw = battle?.status === 'completed' && battle.result === 'draw';
@@ -750,7 +815,7 @@ export function BattlePage() {
       </header>
 
       {/* ══ VS Header (fighting-game confrontation bar) ══════════════════════ */}
-      <div className="vs-header flex-shrink-0 h-[52px]">
+      <div className="vs-header flex-shrink-0 min-h-[76px] py-1">
         {/* Left: You */}
         <PlayerCard
           name={currentPlayer?.name ?? session.user.name}
@@ -772,7 +837,18 @@ export function BattlePage() {
               {won ? '🏆 WIN' : lost ? '💀 LOSS' : '🤝 DRAW'}
             </span>
           ) : (
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest">Waiting</span>
+            battle?.player_a_id === currentUserId && battle?.player_b ? (
+              <button
+                type="button"
+                onClick={() => void handleStartBattle()}
+                disabled={opponentPresence !== 'online'}
+                className="rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/30 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap transition-all"
+              >
+                {opponentPresence === 'online' ? 'Start Battle ⚔️' : 'Wait for join…'}
+              </button>
+            ) : (
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest whitespace-nowrap">Waiting</span>
+            )
           )}
         </div>
 
@@ -783,7 +859,7 @@ export function BattlePage() {
             points={opponent?.points ?? 0}
             rankTier={undefined}
             isAI={battle.is_ai_sparring}
-            presence={opponentPresence}
+            presence={battle.is_ai_sparring ? 'online' : opponentPresence}
             isYou={false}
           />
         ) : (
@@ -914,13 +990,23 @@ export function BattlePage() {
 
           {/* Status bar */}
           <div className="flex-shrink-0 flex items-center justify-between border-t px-4 py-2 text-[11px] text-slate-500" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-panel)' }}>
-            <span>
-              {battle?.status === 'waiting' ? '⏳ Waiting for battle to start'
-               : battle?.status === 'completed' ? '🏁 Battle ended'
-               : `⚡ ${formatCountdown(timeRemaining)} remaining`}
-            </span>
+            <div className="flex items-center gap-3">
+              <span>
+                {battle?.status === 'waiting' ? '⏳ Waiting for battle to start'
+                 : battle?.status === 'completed' ? '🏁 Battle ended'
+                 : `⚡ ${formatCountdown(timeRemaining)} remaining`}
+              </span>
+              {battle?.status === 'completed' && (
+                <button
+                  onClick={handleDebrief}
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/20 transition-colors font-bold uppercase tracking-widest text-[9px]"
+                >
+                  <span aria-hidden="true">🤖</span> Get AI Debrief
+                </button>
+              )}
+            </div>
             {opponentIsOnline && battle?.status === 'active' && (
-              <span className="flex items-center gap-1.5 text-amber-400">
+              <span className="flex items-center gap-1.5 text-emerald-400">
                 <span>🟢 {battle.is_ai_sparring ? 'AI' : 'Opponent'} online</span>
               </span>
             )}
@@ -979,7 +1065,15 @@ export function BattlePage() {
             )}
           </div>
         </div>
-      </div>
+        </div>
+
+      {showDebriefModal && (
+        <AiDebriefModal
+          debrief={debriefData}
+          loading={debriefLoading}
+          onClose={() => setShowDebriefModal(false)}
+        />
+      )}
     </div>
   );
 }

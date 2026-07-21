@@ -8,3 +8,6 @@ coverage/
 *.log
 backend/supabase/.temp/
 .agents
+test-results/
+.github/
+intake/

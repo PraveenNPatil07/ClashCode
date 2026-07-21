@@ -152,3 +152,9 @@ export function closeWar(warId: string) {
     method: 'POST'
   });
 }
+
+export function fetchBattleDebrief(battleId: string, userId: string) {
+  return request<{ debrief: string }>(`/battles/${battleId}/debrief?userId=${userId}`, {
+    method: 'GET'
+  });
+}
