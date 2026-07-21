@@ -3,7 +3,7 @@
   <p><strong>1v1 Live Coding Battles for Colleges</strong></p>
 
   <p>
-    <a href="https://github.com/your-username/clashcode/actions"><img src="https://img.shields.io/github/actions/workflow/status/your-username/clashcode/test.yml?branch=main" alt="Build Status"></a>
+    <a href="https://github.com/PraveenNPatil07/ClashCode/actions"><img src="https://img.shields.io/github/actions/workflow/status/PraveenNPatil07/ClashCode/test.yml?branch=main" alt="Build Status"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
   </p>
