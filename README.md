@@ -9,60 +9,120 @@
   </p>
 </div>
 
-ClashCode is a real-time, competitive coding platform designed for university students. Represent your college, challenge rivals to 1v1 live programming battles, and solve AI-generated or curated algorithms faster than your opponent to climb the global leaderboard.
+Instead of students grinding algorithms in isolation, ClashCode transforms coding into a high-stakes, real-time esport. Represent your college, challenge rivals to live 1v1 battles, and solve AI-generated algorithms faster than your opponent to climb the global leaderboard.
 
-## ✨ Features
+---
 
-- **1v1 Live Battles**: Compete in real-time. Both players get the same problem and a shared timer.
-- **Hidden Judge**: Submit your code and wait for the results. The first correct solution wins.
-- **College Leaderboards**: Every victory earns points for your college, pushing them up the global rankings.
-- **AI-Powered Practice**: Generate custom algorithms using AI to sharpen your skills before entering the arena.
-- **Real-Time Presence**: See exactly who is online and ready to duel via WebSocket-powered lobbies.
-- **Multi-Language Support**: Write solutions in Python, JavaScript, Java, or C++.
+## 📖 Table of Contents
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Architecture & Data Flow](#architecture--data-flow)
+- [Core Features & Guarantees](#core-features--guarantees)
+- [Endpoints](#endpoints)
+- [Technology Stack](#technology-stack)
+- [Local Development](#local-development)
+- [Production Deployment](#production-deployment-render--supabase)
+- [Known Limitations](#known-limitations-hackathon-scope)
 
-## 🏗️ Architecture & Tech Stack
+---
 
-ClashCode is built as a modern full-stack monorepo:
+## 🚨 The Problem
 
-- **Frontend**: React + Vite + TypeScript + TailwindCSS
-- **Backend**: Node.js + Express + TypeScript
-- **Database**: PostgreSQL (via Supabase)
-- **Real-time**: Socket.io
-- **Testing**: Vitest (Unit) & Playwright (E2E)
-- **Package Manager**: npm workspaces
+Current coding platforms (like LeetCode or HackerRank) are solitary experiences. Students grind algorithms in isolation without the thrill of real-time competition or school pride. Furthermore, traditional hackathons and algorithmic competitions rely on static, pre-written problem sets. This creates two issues: 
+1. Problems are easily Googled, encouraging cheating.
+2. Creating fresh, balanced algorithmic problems with robust test cases is incredibly time-consuming for organizers.
 
-### Project Structure
+## 💡 The Solution
 
-```text
-clashcode/
-├── frontend/      # React SPA and UI components
-├── backend/       # Express API and WebSocket server
-│   └── supabase/  # Database migrations and types
-├── shared/        # Shared TypeScript interfaces and types
-├── tests/         # Playwright end-to-end tests
-└── package.json   # Workspace configuration
+ClashCode acts as a real-time arena that completely gamifies algorithmic problem-solving.
+
+1. **Matchmaking:** Students are instantly paired with opponents from rival colleges (or an AI bot if the queue is empty).
+2. **Infinite Novelty:** ClashCode utilizes AI to generate completely unique, novel coding problems and deterministic test cases on the fly.
+3. **Execution & Victory:** Both players share a live timer and submit their code to a hidden judge. The first player to pass all test cases instantly wins, earning points for their college.
+
+---
+
+## 🏗 Architecture & Data Flow
+
+```mermaid
+sequenceDiagram
+    participant Player
+    participant ClashCode API
+    participant Socket.IO
+    participant AI Engine
+    participant Code Judge
+
+    Note over Player,ClashCode API: Phase 1: Matchmaking & Generation
+    Player->>ClashCode API: POST /v1/battles/quickstart
+    ClashCode API->>Socket.IO: Broadcast presence & lock opponent
+    ClashCode API->>AI Engine: Request novel algorithm & test cases
+    AI Engine-->>ClashCode API: Return unique problem (JSON)
+    
+    Note over Player,Code Judge: Phase 2: Live Battle
+    ClashCode API-->>Player: Return Battle ID & Problem
+    Player->>ClashCode API: POST /v1/battles/:id/submit (Code)
+    ClashCode API->>Code Judge: Execute code in sandbox
+    alt Tests Passed
+        Code Judge-->>ClashCode API: Success
+        ClashCode API->>Socket.IO: Broadcast Victory
+    else Tests Failed
+        Code Judge-->>ClashCode API: Failed (Output mismatch)
+        ClashCode API->>Socket.IO: Broadcast Failure (Keep trying)
+    end
 ```
 
-## 🚀 Getting Started
+---
+
+## 🛡 Core Features & Guarantees
+
+- **Real-Time Synchronization:** Powered by Socket.IO, ensuring sub-second state updates across all connected clients during live 1v1 battles. When an opponent submits code, you see it instantly.
+- **Infinite Problem Generation:** Leveraging LLMs (OpenAI) to synthetically generate infinite algorithmic problems, edge cases, and deterministic I/O test cases on-demand.
+- **Safe Execution Sandbox:** User-submitted code (Python, JS, Java, C++) is isolated and executed in a secure environment to prevent malicious system access while providing accurate execution times.
+- **AI Sparring Partner:** If no human opponents are available, players can instantly spin up an AI bot opponent that solves the problem at a simulated human pace, ensuring there is always a match ready.
+- **College Leaderboards:** A global PostgreSQL-backed leaderboard aggregating points across all college members, fostering school pride and rivalry.
+- **Post-Match AI Debriefs:** After a battle concludes, players receive personalized, AI-generated code reviews highlighting optimization opportunities (Big O time/space complexity) for their specific solution.
+
+---
+
+## 🔌 Endpoints
+
+- `POST /api/battles/quickstart`: Enter the matchmaking queue and find an opponent or spawn an AI.
+- `POST /api/battles/:id/submit`: Submit code for execution against hidden test cases.
+- `POST /api/problems/generate`: Generate a completely novel algorithmic problem via AI.
+- `GET /api/leaderboard/colleges`: Fetch the aggregated college rankings.
+- `GET /api/users/:id/dashboard`: Retrieve a user's match history, win rate, and recent battles.
+
+---
+
+## 💻 Technology Stack
+
+- **Frontend**: React (Vite) + TypeScript + TailwindCSS
+- **Backend API Layer**: Node.js + Express + TypeScript
+- **Real-Time**: Socket.IO
+- **Database**: PostgreSQL (via Supabase)
+- **AI Engine**: OpenAI API (for problem generation & debriefs)
+- **Testing**: Playwright (E2E) + Vitest (Unit)
+- **Package Manager**: npm workspaces (Monorepo setup)
+
+---
+
+## 🛠 Local Development
 
 Follow these steps to run ClashCode locally.
 
-### 1. Install Dependencies
-
-From the root directory, install the workspace dependencies:
-
+1. **Install Dependencies**
 ```bash
 npm install
 ```
 
-### 2. Environment Variables
-
+2. **Environment Variables**
 Set up your `.env` files.
 
 **Backend (`backend/.env`)**:
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+OPENAI_API_KEY=your-openai-key
 PORT=4000
 CLIENT_ORIGIN=http://localhost:5173
 ```
@@ -73,45 +133,48 @@ VITE_API_URL=http://localhost:4000/api
 VITE_SOCKET_URL=http://localhost:4000
 ```
 
-### 3. Database Migration & Seeding
-
+3. **Database Migration & Seeding**
 Ensure you have Supabase CLI installed, or use your hosted Supabase dashboard to run the migrations.
-
 ```bash
 # Push the schema to your database
 supabase db push
-
 # Seed the database with mock colleges, users, and problems
 npm run seed
 ```
 
-### 4. Start the Application
-
+4. **Start the Application**
 Start both the backend and frontend development servers.
-
-**Terminal 1 (Backend)**:
 ```bash
 npm run dev:backend
-```
-
-**Terminal 2 (Frontend)**:
-```bash
 npm run dev:frontend
 ```
 
-Open `http://localhost:5173` to view the application!
-
-## 🧪 Testing
+### Running the Test Suite
 
 We use Vitest for unit testing and Playwright for End-to-End (E2E) testing.
-Please see the [TESTING.md](TESTING.md) guide for comprehensive details on how to write and run tests.
+```bash
+npm test
+```
 
-## 🤝 Contributing
+---
 
-We welcome contributions from the community! Whether it's a bug fix, new feature, or documentation improvement, please read our [Contributing Guide](CONTRIBUTING.md) to get started. 
+## 🚀 Production Deployment (Render + Supabase)
 
-Please note that this project is released with a [Contributor Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
+ClashCode is configured to easily deploy to managed hosting providers like Render and Supabase.
 
-## 📄 License
+1. Create a PostgreSQL database on **Supabase** and run the initial migrations located in `backend/supabase/migrations/`.
+2. Push your code to GitHub, then in the **Render Dashboard**, connect this repository to a new Web Service.
+3. Configure the Root Directory to `backend` and set the build command to `npm install && npm run build`.
+4. Render will prompt you for Environment Variables. Paste your Supabase URLs and OpenAI keys.
+5. Deploy the frontend to **Vercel** or **Render Static Sites**, pointing the `VITE_API_URL` to your newly deployed backend service.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+---
+
+## ⚠️ Known Limitations (Hackathon Scope)
+
+While ClashCode is fully functional, certain compromises were made for the scope of this hackathon:
+
+1. **Sandbox Security**: Currently, the code execution sandbox relies on basic isolation. For a true production environment, a more robust solution like Firecracker microVMs or strict Docker resource limits would be necessary to prevent sandbox escapes.
+2. **Matchmaking Scaling**: The matchmaking queue and presence tracking are currently handled in-memory via Socket.IO within a single Node process. Horizontal scaling would require moving this state to a Redis instance and utilizing the `@socket.io/redis-adapter`.
+3. **Database Indexing**: Certain leaderboard queries lack optimized indexes (e.g., aggregating points across thousands of users), which could degrade performance at extremely high player volumes.
+4. **LLM Hallucinations**: While prompts are strictly engineered for JSON output, the AI problem generator may occasionally produce edge-case test constraints that are computationally impossible to solve within the standard 2-second time limit.
